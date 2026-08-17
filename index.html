@@ -309,4 +309,636 @@ print("Sigmoid(2.5):", round(sigmoid(2.5), 4))
       </div>
     </div>
     <div class="video-frame-box">
-      <iframe id="video-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write
+      <iframe id="video-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write <iframe id="video-iframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
+    <div class="video-dock-footer">
+      <input type="text" id="video-url-input" placeholder="Paste YouTube link..." onkeypress="if(event.key==='Enter')loadCustomVideo()" />
+      <button onclick="loadCustomVideo()">Load</button>
+    </div>
+  </div>
+
+  <!-- Floating Companion Dock -->
+  <div class="gemini-companion-dock">
+    <button class="dock-btn" onclick="openPencilTool()" title="Definition & Quick Note">✏️</button>
+    <button class="dock-btn" id="dock-mic-btn" onclick="startVoiceDoubtSession()" title="Ask Doubt in Voice">🎙️</button>
+    <div class="gemini-orb-btn" id="gemini-main-orb" onclick="toggleGeminiDrawer()" title="Open Socratic Tutor"><span>✨</span></div>
+  </div>
+
+  <!-- Smart Pencil Modal -->
+  <div class="modal-sheet-overlay" id="pencil-modal" onclick="closePencilModal(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="color:#fff; font-size:0.95rem;">✏️ Smart Pencil & Instant Definition</h3>
+        <button onclick="closePencilModal()" style="background:none; border:none; color:var(--text-dim); cursor:pointer;">✕</button>
+      </div>
+      <input type="text" id="lookup-input" placeholder="Look up term (e.g. Backprop, LoRA, RAG)..." style="width:100%; background:#090d18; border:1px solid var(--border); border-radius:8px; padding:10px; color:#fff; font-size:0.8rem; margin-bottom:8px; outline:none;" oninput="handleInstantLookup()" />
+      <div id="lookup-result" style="background:#131a2e; border:1px solid var(--border); border-radius:8px; padding:10px; font-size:0.78rem; color:#cbd5e1; line-height:1.4; min-height:50px;">
+        Type any machine learning term above for an instant first-principles definition.
+      </div>
+    </div>
+  </div>
+
+  <!-- Gemini Drawer -->
+  <div class="gemini-drawer-overlay" id="gemini-overlay" onclick="closeGeminiDrawer(event)">
+    <div class="gemini-drawer" onclick="event.stopPropagation()">
+      <div style="padding:14px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-weight:800; font-size:0.9rem; color:#fff;">✨ Jai Jagath Socratic Tutor</div>
+          <div id="api-status-tag" style="font-size:0.68rem; color:var(--gemini-cyan);">Engine: Offline First-Principles</div>
+        </div>
+        <button onclick="toggleGeminiDrawer()" style="background:none; border:none; color:var(--text-dim); font-size:1.2rem; cursor:pointer;">✕</button>
+      </div>
+      <div id="chat-messages" style="flex:1; padding:14px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+        <div style="background:#141b2e; padding:10px; border-radius:10px; font-size:0.8rem; line-height:1.4;">
+          Ask any concept doubt or math derivation. Tap the mic or type below.
+        </div>
+      </div>
+      <div style="padding:12px; border-top:1px solid var(--border); display:flex; gap:8px;">
+        <button class="dock-btn" id="drawer-mic-btn" onclick="toggleVoiceSpeechRecognition()" style="width:40px; height:40px; border-radius:8px;">🎙️</button>
+        <input type="text" id="chat-input-field" placeholder="Speak doubt or type..." style="flex:1; background:#121828; border:1px solid var(--border); border-radius:8px; padding:8px; color:#fff; font-size:0.8rem; outline:none;" onkeypress="if(event.key==='Enter')sendUserMessage()" />
+        <button onclick="sendUserMessage()" style="padding:8px 14px; background:var(--gemini-gradient); border:none; border-radius:8px; color:#fff; font-weight:800; cursor:pointer;">Ask</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-sheet-overlay" id="settings-modal" onclick="closeSettingsModal(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <h3 style="color:#fff; font-size:1rem; margin-bottom:8px;">⚙️ Settings & Screen Vision</h3>
+      <p style="font-size:0.75rem; color:var(--text-dim); margin-bottom:10px;">
+        Add your Google AI Studio Gemini API key to unlock Live Multimodal Screen Vision.
+      </p>
+      <input type="password" id="input-api-key" placeholder="AIzaSy..." style="width:100%; background:#090d18; border:1px solid var(--border); border-radius:8px; padding:10px; color:#fff; margin-bottom:10px; outline:none;" />
+      <button onclick="saveApiKey()" style="width:100%; padding:10px; background:linear-gradient(135deg,#38bdf8,#0284c7); border:none; border-radius:8px; color:#fff; font-weight:800; cursor:pointer; margin-bottom:8px;">Save Key</button>
+      <button onclick="initScreenVision()" style="width:100%; padding:10px; background:#1e293b; border:1px solid var(--gemini-purple); border-radius:8px; color:#e9d5ff; font-weight:700; cursor:pointer;">👁️ Initialize Screen Vision Capture</button>
+    </div>
+  </div>
+
+  <!-- README Modal -->
+  <div class="modal-sheet-overlay" id="readme-modal" onclick="closeReadmeModal(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <h3 style="color:#fff; font-size:0.95rem;">📄 Export GitHub README.md</h3>
+        <button onclick="closeReadmeModal()" style="background:none; border:none; color:var(--text-dim); cursor:pointer;">✕</button>
+      </div>
+      <div id="readme-text" class="readme-preview"></div>
+      <button onclick="copyReadmeClipboard()" style="width:100%; margin-top:12px; padding:10px; background:var(--gemini-gradient); border:none; border-radius:8px; color:#fff; font-weight:800; cursor:pointer;">📋 Copy to Clipboard</button>
+    </div>
+  </div>
+
+  <script>
+    // --- Starfield Animation ---
+    const canvas = document.getElementById('bg-canvas');
+    const ctx = canvas.getContext('2d');
+    let stars = [];
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize); resize();
+    for(let i=0; i<30; i++){ stars.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, r: Math.random()*1.2 + 0.4, sp: Math.random()*0.2 + 0.1 }); }
+    function drawStars() {
+      ctx.clearRect(0,0,canvas.width, canvas.height);
+      ctx.fillStyle = '#38bdf8';
+      stars.forEach(s => {
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+        s.y -= s.sp; if(s.y < 0) { s.y = canvas.height; s.x = Math.random()*canvas.width; }
+      });
+      requestAnimationFrame(drawStars);
+    }
+    drawStars();
+
+    // --- State Persistence ---
+    const DB_KEY = "jai_jagath_ai_v8";
+    let state = JSON.parse(localStorage.getItem(DB_KEY)) || {
+      completedStages: {},
+      completedBosses: {},
+      streakCount: 1,
+      lastActiveDate: new Date().toISOString().split('T')[0],
+      bonusXP: 0,
+      geminiApiKey: "",
+      sm2Cards: seedSM2DeckFromCurriculum(),
+      notes: ""
+    };
+
+    function save() {
+      localStorage.setItem(DB_KEY, JSON.stringify(state));
+      renderStats();
+    }
+
+    // --- Tab Switcher ---
+    function switchMainTab(tab) {
+      document.querySelectorAll('.view-btn').forEach((b, i) => b.classList.toggle('active', 
+        (tab === 'roadmap' && i===0) || (tab === 'bosses' && i===1) || (tab === 'recall' && i===2) || (tab === 'sandbox' && i===3) || (tab === 'notes' && i===4)
+      ));
+      document.querySelectorAll('.section-pane').forEach(p => p.classList.remove('active'));
+      document.getElementById(`pane-${tab}`).classList.add('active');
+
+      if (tab === 'sandbox' && !pyodideInstance) {
+        lazyLoadPyodide().catch(() => {});
+      }
+    }
+
+    // --- Render Roadmap & Bosses ---
+    function renderMap() {
+      const mount = document.getElementById('nodes-mount');
+      mount.innerHTML = '';
+      let all = [];
+      CURRICULUM.phases.forEach(p => p.stages.forEach(s => all.push(s)));
+      let activeId = (all.find(s => !state.completedStages[s.id]) || {}).id;
+
+      let idx = 1;
+      CURRICULUM.phases.forEach(phase => {
+        const banner = document.createElement('div');
+        banner.className = 'region-banner';
+        banner.innerHTML = `<div style="font-size:0.65rem; font-weight:800; color:var(--accent); text-transform:uppercase;">${phase.region}</div><div style="font-size:0.9rem; font-weight:800; color:#fff;">${phase.name}</div>`;
+        mount.appendChild(banner);
+
+        phase.stages.forEach(stage => {
+          const isDone = !!state.completedStages[stage.id];
+          const tierClass = stage.tier === 'S' ? 'tier-s' : stage.tier === 'A' ? 'tier-a' : stage.tier === 'B' ? 'tier-b' : 'tier-none';
+
+          const node = document.createElement('div');
+          node.className = `quest-node ${isDone ? 'completed' : ''}`;
+          node.onclick = () => {
+            state.completedStages[stage.id] = !state.completedStages[stage.id];
+            save();
+            renderMap();
+          };
+
+          node.innerHTML = `
+            <div class="orb-box"><div class="node-orb">${isDone ? '✓' : idx}</div></div>
+            <div class="quest-card">
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span style="font-size:0.68rem; font-weight:800; color:var(--accent);">${stage.weeks}</span>
+                <span class="badge-pill ${tierClass}">${stage.tier === 'None' ? 'Unranked' : 'Tier ' + stage.tier}</span>
+              </div>
+              <div style="font-size:0.88rem; font-weight:700; color:#fff; ${isDone ? 'text-decoration:line-through; color:var(--text-dim);' : ''}">${stage.title}</div>
+              <div style="font-size:0.76rem; color:#cbd5e1; margin-top:2px;">${stage.focus}</div>
+            </div>
+          `;
+          mount.appendChild(node);
+          idx++;
+        });
+      });
+    }
+
+    function renderBosses() {
+      const mount = document.getElementById('boss-mount');
+      mount.innerHTML = '';
+      CURRICULUM.bossProjects.forEach(bp => {
+        const isDone = !!state.completedBosses[bp.id];
+        const el = document.createElement('div');
+        el.className = `boss-card ${isDone ? 'completed' : ''}`;
+        el.innerHTML = `
+          <div style="display:flex; gap:10px; align-items:center; cursor:pointer;" onclick="toggleBoss('${bp.id}')">
+            <div style="font-size:1.3rem;">${isDone ? '🏆' : bp.icon}</div>
+            <div style="flex:1;">
+              <div style="display:flex; justify-content:space-between;">
+                <span style="font-size:0.68rem; font-weight:800; color:var(--gold);">BOSS BUILD #${bp.num}</span>
+                <span class="badge-pill tier-s">${bp.diff}</span>
+              </div>
+              <div style="font-size:0.88rem; font-weight:700; color:#fff; ${isDone ? 'text-decoration:line-through;' : ''}">${bp.title}</div>
+              <div style="font-size:0.72rem; color:var(--text-dim);">${bp.why}</div>
+            </div>
+          </div>
+          <button class="btn-readme-export" onclick="openReadme('${bp.id}')">📄 Export GitHub README.md</button>
+        `;
+        mount.appendChild(el);
+      });
+    }
+
+    function toggleBoss(id) {
+      state.completedBosses[id] = !state.completedBosses[id];
+      save();
+      renderBosses();
+    }
+
+    function openReadme(id) {
+      const bp = CURRICULUM.bossProjects.find(b => b.id === id);
+      if (!bp) return;
+      document.getElementById('readme-text').innerText = `# ${bp.title}\n\n## Objective\n${bp.why}\n\n## Tech Stack\n* **Primary Frameworks:** ${bp.stack}\n* **Repository Classification:** Boss Build #${bp.num}\n\n## Verification\n* Pipeline benchmarks verified against ground-truth validation datasets.\n`;
+      document.getElementById('readme-modal').classList.add('open');
+    }
+    function closeReadmeModal() { document.getElementById('readme-modal').classList.remove('open'); }
+    function copyReadmeClipboard() {
+      navigator.clipboard.writeText(document.getElementById('readme-text').innerText);
+      alert("📋 Markdown copied to clipboard!");
+    }
+
+    // --- SM-2 Deck Renderer ---
+    function renderSM2Decks() {
+      const mount = document.getElementById('recall-mount');
+      mount.innerHTML = '';
+      const now = Date.now();
+      let dueCount = 0;
+
+      state.sm2Cards.forEach(card => {
+        const isDue = card.nextDate <= now;
+        if (isDue) dueCount++;
+        const nextDays = Math.max(0, Math.ceil((card.nextDate - now) / (1000 * 60 * 60 * 24)));
+
+        const div = document.createElement('div');
+        div.className = 'recall-card';
+        div.innerHTML = `
+          <div style="font-size:0.68rem; color:var(--accent); font-family:monospace;">
+            Status: ${isDue ? '⚡ Due for Review' : `⏳ Due in ${nextDays} day(s)`} • Reps: ${card.reps} • EF: ${card.ef}
+          </div>
+          <div style="font-size:0.84rem; font-weight:700; color:#fff;">${card.q}</div>
+          <button onclick="document.getElementById('ans-${card.id}').classList.toggle('show')" style="align-self:flex-start; background:#141b2e; border:1px solid var(--border); border-radius:6px; color:var(--accent); font-size:0.72rem; padding:4px 8px; cursor:pointer;">Reveal Answer</button>
+          <div id="ans-${card.id}" class="recall-answer">${card.a}</div>
+          <div class="recall-rating-row">
+            <button class="btn-sm2-rate rate-again" onclick="rateSM2Card('${card.id}', 0)">Again</button>
+            <button class="btn-sm2-rate rate-hard" onclick="rateSM2Card('${card.id}', 3)">Hard</button>
+            <button class="btn-sm2-rate rate-good" onclick="rateSM2Card('${card.id}', 4)">Good</button>
+            <button class="btn-sm2-rate rate-easy" onclick="rateSM2Card('${card.id}', 5)">Easy</button>
+          </div>
+        `;
+        mount.appendChild(div);
+      });
+
+      document.getElementById('deck-due-count').innerText = `${dueCount} Due Today`;
+    }
+
+    function rateSM2Card(cardId, rating) {
+      const card = state.sm2Cards.find(c => c.id === cardId);
+      if (!card) return;
+      const updated = sm2Review(card, rating);
+      state.sm2Cards = sm2UpdateCardInDeck(state.sm2Cards, updated);
+      state.bonusXP += (rating >= 3 ? rating * 4 : 5);
+      save();
+      renderSM2Decks();
+    }
+
+    // --- Stats HUD ---
+    function renderStats() {
+      let stagesDone = 0, totalStages = 0, earnedXP = state.bonusXP || 0, totalXP = 0;
+      CURRICULUM.phases.forEach(p => p.stages.forEach(s => {
+        totalStages++; totalXP += s.xp;
+        if (state.completedStages[s.id]) { stagesDone++; earnedXP += s.xp; }
+      }));
+      CURRICULUM.bossProjects.forEach(b => {
+        totalXP += b.xp;
+        if (state.completedBosses[b.id]) { earnedXP += b.xp; }
+      });
+
+      const pct = Math.round((stagesDone / totalStages) * 100);
+      document.getElementById('hud-pct').innerText = `${pct}%`;
+      document.getElementById('hud-xp').innerText = `${earnedXP} XP`;
+      document.getElementById('xp-fill').style.width = `${pct}%`;
+      document.getElementById('hud-stages').innerText = `${stagesDone} / ${totalStages} Stages`;
+
+      const level = Math.max(1, Math.round((earnedXP / totalXP) * 72));
+      document.getElementById('player-rank').innerText = `Level ${level} • Day ${Math.min(504, level * 7)}`;
+      document.getElementById('spine-fill').style.height = `${pct}%`;
+    }
+
+    // --- Python WebAssembly ---
+    let pyodideInstance = null;
+    let pyodideLoadingPromise = null;
+
+    async function lazyLoadPyodide() {
+      if (pyodideInstance) return pyodideInstance;
+      if (pyodideLoadingPromise) return pyodideLoadingPromise;
+
+      const status = document.getElementById('pyodide-status');
+      status.innerText = "⏳ Loading WASM Runtime...";
+
+      pyodideLoadingPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js";
+        script.onload = async () => {
+          try {
+            pyodideInstance = await loadPyodide();
+            status.innerText = "● WASM Cached & Ready";
+            status.style.color = "var(--emerald)";
+            resolve(pyodideInstance);
+          } catch (err) {
+            status.innerText = "❌ Engine Error";
+            reject(err);
+          }
+        };
+        script.onerror = () => {
+          status.innerText = "❌ Offline Load Failed";
+          reject(new Error("Failed to fetch Pyodide script"));
+        };
+        document.head.appendChild(script);
+      });
+      return pyodideLoadingPromise;
+    }
+
+    async function executePythonCode() {
+      const out = document.getElementById('terminal');
+      const code = document.getElementById('py-code').value;
+      out.innerText = "Initializing execution context...\n";
+
+      try {
+        const py = await lazyLoadPyodide();
+        py.setStdout({ batched: (msg) => { out.innerText += msg + "\n"; } });
+        let result = await py.runPythonAsync(code);
+        if (result !== undefined) out.innerText += `\nReturn: ${result}`;
+      } catch (err) {
+        out.innerText += `\nTraceback:\n${err}`;
+      }
+    }
+
+    // --- Smart Pencil & Lookup ---
+    function openPencilTool() {
+      document.getElementById('pencil-modal').classList.add('open');
+      document.getElementById('lookup-input').focus();
+    }
+    function closePencilModal(e) { document.getElementById('pencil-modal').classList.remove('open'); }
+
+    function handleInstantLookup() {
+      const query = document.getElementById('lookup-input').value.trim().toLowerCase();
+      const resBox = document.getElementById('lookup-result');
+      if (!query) {
+        resBox.innerText = "Type any machine learning term above for an instant definition.";
+        return;
+      }
+      const match = Object.keys(CURRICULUM.glossary).find(k => k.includes(query) || query.includes(k));
+      if (match) {
+        resBox.innerHTML = `<strong>${match.toUpperCase()}:</strong> ${CURRICULUM.glossary[match]}`;
+      } else {
+        resBox.innerText = `No offline definition for "${query}". Tap voice tutor to query Gemini.`;
+      }
+    }
+
+    function saveNotes() {
+      state.notes = document.getElementById('scratchpad-text').value;
+      save();
+      alert("✅ Notes saved!");
+    }
+
+    // --- Docked Video Player ---
+    function parseYouTubeEmbedUrl(url) {
+      if (!url) return null;
+      let videoId = null;
+      if (url.includes("youtu.be/")) videoId = url.split("youtu.be/")[1].split("?")[0];
+      else if (url.includes("watch?v=")) videoId = url.split("watch?v=")[1].split("&")[0];
+      else if (url.includes("/embed/")) videoId = url.split("/embed/")[1].split("?")[0];
+      return videoId ? `https://www.youtube.com/embed/${videoId}?enablejsapi=1` : null;
+    }
+
+    function openDockedVideo(rawUrl) {
+      const embedUrl = parseYouTubeEmbedUrl(rawUrl);
+      const dock = document.getElementById("docked-video-panel");
+      const iframe = document.getElementById("video-iframe");
+      const extLink = document.getElementById("video-external-link");
+
+      if (embedUrl) {
+        iframe.src = embedUrl;
+        extLink.href = rawUrl;
+        dock.classList.remove("hidden", "minimized");
+      } else {
+        window.open(rawUrl, "_blank", "noopener");
+      }
+    }
+
+    function loadCustomVideo() {
+      const input = document.getElementById("video-url-input");
+      if (input.value.trim()) {
+        openDockedVideo(input.value.trim());
+        input.value = "";
+      }
+    }
+
+    function toggleMinimizeVideo() {
+      const dock = document.getElementById("docked-video-panel");
+      const btn = document.getElementById("btn-min-video");
+      const isMin = dock.classList.toggle("minimized");
+      btn.innerText = isMin ? "+" : "−";
+    }
+
+    function closeDockedVideo() {
+      const dock = document.getElementById("docked-video-panel");
+      document.getElementById("video-iframe").src = "";
+      dock.classList.add("hidden");
+    }
+
+    // --- Screen Vision API ---
+    let screenStream = null;
+    async function initScreenVision() {
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
+        alert("👁️ Jai Jagath AI is monitoring your screen.");
+        closeSettingsModal();
+      } catch (err) {
+        console.warn("Screen capture cancelled:", err);
+      }
+    }
+
+    function captureScreenFrame() {
+      if (!screenStream) return null;
+      const videoTrack = screenStream.getVideoTracks()[0];
+      if (!videoTrack || videoTrack.readyState !== "live") return null;
+
+      const video = document.createElement("video");
+      video.srcObject = screenStream;
+      video.play();
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+    }
+
+    // --- Gemini Socratic Engine ---
+    async function resolveVoiceDoubt(doubtText) {
+      if (state.geminiApiKey) {
+        try {
+          const base64Image = captureScreenFrame();
+          const contentsPayload = [
+            {
+              parts: [
+                { text: `You are Jai Jagath Artificial Intelligence Socratic Tutor. The student asks: "${doubtText}". Answer from first principles concisely under 120 words.` },
+                ...(base64Image ? [{ inline_data: { mime_type: "image/jpeg", data: base64Image } }] : [])
+              ]
+            }
+          ];
+
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiApiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: contentsPayload })
+          });
+          const data = await res.json();
+          if (data.candidates && data.candidates[0].content.parts[0].text) {
+            const aiText = data.candidates[0].content.parts[0].text;
+            appendAgentMsg(aiText);
+            speakText(aiText);
+            return;
+          }
+        } catch (e) {
+          console.warn("API error, fallback to offline:", e);
+        }
+      }
+
+      // Offline Fallback
+      setTimeout(() => {
+        let reply = "";
+        const low = doubtText.toLowerCase();
+        if (low.includes("difference") && (low.includes("ai") || low.includes("ml"))) {
+          reply = `**Taxonomy:** AI is the broad science of intelligent agents. Machine Learning is a subset that learns parameters from data without hardcoded rules. Deep Learning is an ML subset using multi-layer neural networks.`;
+        } else if (low.includes("backprop")) {
+          reply = `**Backpropagation:** Applies the calculus chain rule backwards from the loss function, calculating partial derivatives to update weights via gradient descent.`;
+        } else {
+          reply = `**First-Principles:** Anchor "${doubtText}" to tensor operations. Test this concept directly in the WebAssembly Python sandbox to observe behavior.`;
+        }
+        appendAgentMsg(reply);
+        speakText(reply);
+      }, 300);
+    }
+
+    // --- Voice Recognition & TTS ---
+    let speechRecognition = null;
+    let isListening = false;
+    const synth = window.speechSynthesis;
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      speechRecognition = new SpeechRec();
+      speechRecognition.continuous = false;
+      speechRecognition.interimResults = false;
+      speechRecognition.lang = 'en-US';
+
+      speechRecognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        document.getElementById('chat-input-field').value = transcript;
+        sendUserMessage();
+      };
+      speechRecognition.onend = () => { isListening = false; updateMicUI(false); };
+    }
+
+    function startVoiceDoubtSession() {
+      document.getElementById('gemini-overlay').classList.add('open');
+      toggleVoiceSpeechRecognition();
+    }
+
+    function toggleVoiceSpeechRecognition() {
+      if (!speechRecognition) { alert("Voice recognition not supported on this browser."); return; }
+      if (isListening) speechRecognition.stop();
+      else {
+        isListening = true;
+        updateMicUI(true);
+        speechRecognition.start();
+      }
+    }
+
+    function updateMicUI(listening) {
+      document.getElementById('dock-mic-btn').classList.toggle('listening', listening);
+      document.getElementById('drawer-mic-btn').classList.toggle('listening', listening);
+    }
+
+    function speakText(text) {
+      if (!synth) return;
+      synth.cancel();
+      const clean = text.replace(/[*#_`>]/g, '');
+      const u = new SpeechSynthesisUtterance(clean);
+      u.rate = 1.05;
+      synth.speak(u);
+    }
+
+    function toggleGeminiDrawer() { document.getElementById('gemini-overlay').classList.toggle('open'); }
+    function closeGeminiDrawer(e) { document.getElementById('gemini-overlay').classList.remove('open'); if(synth) synth.cancel(); }
+
+    function appendUserMsg(txt) {
+      const c = document.getElementById('chat-messages');
+      const d = document.createElement('div');
+      d.innerHTML = `<span style="font-size:0.68rem; color:var(--text-dim); font-weight:800;">You</span><div style="background:linear-gradient(135deg,#0284c7,#2563eb); padding:8px 12px; border-radius:10px; font-size:0.8rem; margin-top:2px;">${txt}</div>`;
+      c.appendChild(d); c.scrollTop = c.scrollHeight;
+    }
+
+    function appendAgentMsg(markdown) {
+      const c = document.getElementById('chat-messages');
+      const d = document.createElement('div');
+      const html = markdown.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>');
+      d.innerHTML = `<span style="font-size:0.68rem; color:var(--gemini-cyan); font-weight:800;">Jai Jagath AI</span><div style="background:#141b2e; border:1px solid #243152; padding:8px 12px; border-radius:10px; font-size:0.8rem; margin-top:2px; line-height:1.4;">${html}</div>`;
+      c.appendChild(d); c.scrollTop = c.scrollHeight;
+    }
+
+    function sendUserMessage() {
+      const field = document.getElementById('chat-input-field');
+      const val = field.value.trim();
+      if (!val) return;
+      field.value = '';
+      appendUserMsg(val);
+      resolveVoiceDoubt(val);
+    }
+
+    // --- Pomodoro & Backup ---
+    let pomoSeconds = 25 * 60, pomoInterval = null, pomoRunning = false;
+    function togglePomodoro() {
+      const btn = document.getElementById('btn-pomo');
+      if (pomoRunning) { clearInterval(pomoInterval); pomoRunning = false; btn.innerText = "Resume"; }
+      else {
+        pomoRunning = true; btn.innerText = "Pause";
+        pomoInterval = setInterval(() => {
+          pomoSeconds--;
+          const m = Math.floor(pomoSeconds / 60), s = pomoSeconds % 60;
+          document.getElementById('pomo-timer-display').innerText = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+          if (pomoSeconds <= 0) {
+            clearInterval(pomoInterval); pomoRunning = false; pomoSeconds = 25 * 60;
+            state.bonusXP += 25; save();
+            speakText("Focus sprint finished. 25 XP earned.");
+          }
+        }, 1000);
+      }
+    }
+
+    function exportSaveData() {
+      const safeCopy = { ...state, geminiApiKey: "" };
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(safeCopy, null, 2));
+      const a = document.createElement('a'); a.setAttribute("href", dataStr);
+      a.setAttribute("download", `jai_jagath_ai_backup_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    function importSaveData(e) {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          state = JSON.parse(evt.target.result);
+          save(); renderMap(); renderBosses(); renderSM2Decks();
+          if (state.notes) document.getElementById('scratchpad-text').value = state.notes;
+          alert("✅ Save data restored!");
+        } catch(err) { alert("❌ Invalid JSON file"); }
+      };
+      reader.readAsText(file);
+    }
+
+    function openSettingsModal() {
+      document.getElementById('input-api-key').value = state.geminiApiKey || "";
+      document.getElementById('settings-modal').classList.add('open');
+    }
+    function closeSettingsModal(e) { document.getElementById('settings-modal').classList.remove('open'); }
+    function saveApiKey() {
+      state.geminiApiKey = document.getElementById('input-api-key').value.trim();
+      save();
+      document.getElementById('api-status-tag').innerText = state.geminiApiKey ? "Engine: Live Gemini Flash" : "Engine: Offline First-Principles";
+      closeSettingsModal();
+    }
+
+    // --- Android URL Shortcuts ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');
+    if (action === 'note') openPencilTool();
+    else if (action === 'doubt') startVoiceDoubtSession();
+    else if (action === 'review') switchMainTab('recall');
+
+    // --- Init ---
+    renderMap();
+    renderBosses();
+    renderSM2Decks();
+    renderStats();
+    if (state.notes) document.getElementById('scratchpad-text').value = state.notes;
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(console.error);
+      });
+    }
+  </script>
+</body>
+</html>
