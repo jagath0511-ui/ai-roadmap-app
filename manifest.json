@@ -1,0 +1,40 @@
+{
+  "name": "Jai Jagath Artificial Intelligence",
+  "short_name": "Jai Jagath AI",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#070913",
+  "theme_color": "#070913",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Quick Note & Definition",
+      "short_name": "Note",
+      "description": "Open the Smart Pencil scratchpad and dictionary",
+      "url": "./index.html?action=note",
+      "icons": [{ "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✏️</text></svg>", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ask Voice Doubt",
+      "short_name": "Doubt",
+      "description": "Start Socratic voice doubt solver",
+      "url": "./index.html?action=doubt",
+      "icons": [{ "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>", "sizes": "192x192" }]
+    },
+    {
+      "name": "Daily SM-2 Review",
+      "short_name": "Review",
+      "description": "Review today's due spaced recall cards",
+      "url": "./index.html?action=review",
+      "icons": [{ "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>", "sizes": "192x192" }]
+    }
+  ]
+}
