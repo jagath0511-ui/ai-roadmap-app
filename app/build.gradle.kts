@@ -11,8 +11,8 @@ android {
         applicationId = "com.jai.agent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
     }
 
     buildTypes {
@@ -34,4 +34,10 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    
+    // Web Parsing & Scraping Engine
+    implementation("org.jsoup:jsoup:1.17.2")
+    
+    // 24-Hour Periodic Background Task Scheduler
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }
