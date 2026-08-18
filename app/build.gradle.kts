@@ -35,9 +35,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     
-    // Web Parsing & Scraping Engine
+    // Web scraping engine
     implementation("org.jsoup:jsoup:1.17.2")
     
-    // 24-Hour Periodic Background Task Scheduler
+    // 24-Hour background task scheduler
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 }
