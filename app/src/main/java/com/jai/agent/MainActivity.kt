@@ -11,13 +11,21 @@ import android.widget.Toast
 class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         val btn = Button(this).apply {
-            text = "Enable JAI Overlay & Permissions"
+            text = "Start JAI Floating Companion"
             setOnClickListener {
                 if (!Settings.canDrawOverlays(this@MainActivity)) {
-                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
                 } else {
-                    Toast.makeText(this@MainActivity, "Permissions Active!", Toast.LENGTH_SHORT).show()
+                    val serviceIntent = Intent(this@MainActivity, FloatingOverlayService::class.java)
+                    startService(serviceIntent)
+                    Toast.makeText(this@MainActivity, "JAI Floating Companion Active!", Toast.LENGTH_SHORT).show()
+                    finish()
                 }
             }
         }
