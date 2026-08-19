@@ -39,5 +39,5 @@ dependencies {
     implementation("org.jsoup:jsoup:1.17.2")
     
     // 24-Hour background task scheduler
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
 }
