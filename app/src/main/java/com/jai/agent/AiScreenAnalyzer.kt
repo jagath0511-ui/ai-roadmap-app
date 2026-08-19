@@ -15,12 +15,12 @@ import java.util.concurrent.TimeUnit
 
 object AiScreenAnalyzer {
 
-    // Configured with Active Google AI Studio Key (Project: 901415720150)
+    // Configured with Active Google AI Studio Key
     var apiKey: String = "AQ.Ab8RN6L14sk4W0lOYZLLDdltA3U1FKHGML1h2asV1q-1SeXCHA"
     
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS) // Optimized for faster timeout response
+        .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
     suspend fun analyzeScreenImage(bitmap: Bitmap?, customPrompt: String): String = withContext(Dispatchers.IO) {
@@ -30,7 +30,7 @@ object AiScreenAnalyzer {
 
             if (bitmap != null) {
                 val outputStream = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream) // Reduced compression weight for speed
                 val base64Data = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 
                 val inlineData = JSONObject().apply {
@@ -38,6 +38,7 @@ object AiScreenAnalyzer {
                     put("data", base64Data)
                 }
                 partsArray.put(JSONObject().put("inlineData", inlineData))
+                outputStream.close()
             }
 
             val contentsArray = JSONArray().apply {
@@ -51,7 +52,7 @@ object AiScreenAnalyzer {
             val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
             val requestBody = requestJson.toString().toRequestBody(mediaType)
 
-            // High-speed multimodal Gemini endpoint
+            // ACTIVE HIGH-SPEED ENDPOINT
             val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
             val request = Request.Builder()
                 .url(url)
@@ -60,29 +61,30 @@ object AiScreenAnalyzer {
                 .post(requestBody)
                 .build()
 
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string().orEmpty()
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
 
-            if (!response.isSuccessful) {
-                return@withContext "API Error (${response.code}): $responseBody"
-            }
-
-            val jsonResponse = JSONObject(responseBody)
-            val candidates = jsonResponse.optJSONArray("candidates")
-            if (candidates != null && candidates.length() > 0) {
-                val candidate = candidates.getJSONObject(0)
-                val content = candidate.optJSONObject("content")
-                val parts = content?.optJSONArray("parts")
-                if (parts != null && parts.length() > 0) {
-                    parts.getJSONObject(0).optString("text", "No text content generated.")
-                } else {
-                    "Generated response was empty (Finish reason: ${candidate.optString("finishReason")})"
+                if (!response.isSuccessful) {
+                    return@withContext "API Error (${response.code}): $responseBody"
                 }
-            } else {
-                "No candidate response returned from Gemini."
+
+                val jsonResponse = JSONObject(responseBody)
+                val candidates = jsonResponse.optJSONArray("candidates")
+                if (candidates != null && candidates.length() > 0) {
+                    val candidate = candidates.getJSONObject(0)
+                    val content = candidate.optJSONObject("content")
+                    val parts = content?.optJSONArray("parts")
+                    if (parts != null && parts.length() > 0) {
+                        return@withContext parts.getJSONObject(0).optString("text", "No text content generated.")
+                    } else {
+                        return@withContext "Empty response parts (Finish reason: ${candidate.optString("finishReason")})"
+                    }
+                } else {
+                    return@withContext "No candidate response returned from Gemini."
+                }
             }
         } catch (e: Exception) {
-            "Vision Engine Error: ${e.localizedMessage ?: e.javaClass.simpleName}"
+            return@withContext "Vision Engine Error: ${e.localizedMessage ?: e.javaClass.simpleName}"
         }
     }
 }
