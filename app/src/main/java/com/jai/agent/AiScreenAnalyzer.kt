@@ -1,6 +1,7 @@
 package com.jai.agent
 
 import android.graphics.Bitmap
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -10,12 +11,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
-import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 object AiScreenAnalyzer {
 
-    // Your active Google AI Studio Gemini API Key
+    // Your Google AI Studio Gemini API Key
     private const val API_KEY = "AQ.Ab8RN6LGzp4hSH577WHPLJscu4hWr8jPx-VWolSgZSv3xm8kRg"
 
     private val client = OkHttpClient.Builder()
@@ -29,20 +29,20 @@ object AiScreenAnalyzer {
                 val contentsArray = JSONArray()
                 val partsArray = JSONArray()
 
-                // Add user text prompt / instruction
+                // Add text instruction
                 partsArray.put(JSONObject().put("text", customPrompt))
 
-                // Add image if captured from Screen or Cameras
+                // Add image payload using canonical Google camelCase schema
                 if (bitmap != null) {
                     val stream = ByteArrayOutputStream()
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
-                    val base64Image = Base64.getEncoder().encodeToString(stream.toByteArray())
+                    val base64Image = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
 
                     val inlineData = JSONObject().apply {
-                        put("mime_type", "image/jpeg")
+                        put("mimeType", "image/jpeg")
                         put("data", base64Image)
                     }
-                    partsArray.put(JSONObject().put("inline_data", inlineData))
+                    partsArray.put(JSONObject().put("inlineData", inlineData))
                 }
 
                 contentsArray.put(JSONObject().put("parts", partsArray))
@@ -62,12 +62,18 @@ object AiScreenAnalyzer {
 
                 if (response.isSuccessful) {
                     val json = JSONObject(responseBody)
-                    json.getJSONArray("candidates")
-                        .getJSONObject(0)
-                        .getJSONObject("content")
-                        .getJSONArray("parts")
-                        .getJSONObject(0)
-                        .getString("text")
+                    val candidates = json.optJSONArray("candidates")
+                    if (candidates != null && candidates.length() > 0) {
+                        val content = candidates.getJSONObject(0).optJSONObject("content")
+                        val parts = content?.optJSONArray("parts")
+                        if (parts != null && parts.length() > 0) {
+                            parts.getJSONObject(0).optString("text", "No text generated.")
+                        } else {
+                            "Response completed with no text (Finish reason: ${candidates.getJSONObject(0).optString("finishReason")})"
+                        }
+                    } else {
+                        "No response candidate returned by Gemini."
+                    }
                 } else {
                     "API Error (${response.code}): $responseBody"
                 }
