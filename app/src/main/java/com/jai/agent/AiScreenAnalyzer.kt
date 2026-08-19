@@ -32,7 +32,7 @@ object AiScreenAnalyzer {
                 // Add text instruction
                 partsArray.put(JSONObject().put("text", customPrompt))
 
-                // Add image payload using canonical Google camelCase schema
+                // Add image payload
                 if (bitmap != null) {
                     val stream = ByteArrayOutputStream()
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
