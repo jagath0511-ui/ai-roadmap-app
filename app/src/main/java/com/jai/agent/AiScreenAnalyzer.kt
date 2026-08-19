@@ -52,7 +52,7 @@ object AiScreenAnalyzer {
             val requestBody = requestJson.toString().toRequestBody(mediaType)
 
             // High-speed multimodal Gemini endpoint
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
             val request = Request.Builder()
                 .url(url)
                 .addHeader("x-goog-api-key", apiKey)
