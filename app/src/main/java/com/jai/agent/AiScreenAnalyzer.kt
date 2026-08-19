@@ -15,7 +15,6 @@ import java.util.concurrent.TimeUnit
 
 object AiScreenAnalyzer {
 
-    // Configured Gemini API Key
     var apiKey: String = "AQ.Ab8RN6LGzp4hSH577WHPLJscu4hWr8jPx-VWolSgZSv3xm8kRg"
 
     private val client = OkHttpClient.Builder()
