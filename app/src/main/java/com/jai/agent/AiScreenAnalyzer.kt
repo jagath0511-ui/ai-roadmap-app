@@ -16,8 +16,8 @@ import java.util.concurrent.TimeUnit
 object AiScreenAnalyzer {
 
     // Configured with Active Google AI Studio Key (Project: 901415720150)
-    var apiKey: String = AQ.Ab8RN6L14sk4W0lOYZLLDdltA3U1FKHGML1h2asV1q-1SeXCHA
-
+    var apiKey: String = "AQ.Ab8RN6L14sk4W0lOYZLLDdltA3U1FKHGML1h2asV1q-1SeXCHA"
+    
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
