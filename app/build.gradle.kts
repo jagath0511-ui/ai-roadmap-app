@@ -35,12 +35,12 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // Web search engine
+    // Web Search Engine
     implementation("org.jsoup:jsoup:1.17.2")
 
-    // 24-hour background task scheduler
+    // 24-Hour Task Scheduler
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
-    // Offline Voice Engine (Kokoro-82M ONNX)
+    // Offline ONNX Voice Engine
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
 }
