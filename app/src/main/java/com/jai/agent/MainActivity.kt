@@ -1,8 +1,10 @@
 package com.jai.agent
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.media.projection.MediaProjectionManager
@@ -14,10 +16,13 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
 
     private val REQUEST_SCREEN_CAPTURE = 1001
+    private val REQUEST_PERMISSIONS = 2001
     private lateinit var mediaProjectionManager: MediaProjectionManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,7 +37,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "⚡ JAI Agent Hub"
+            text = "⚡ JAI Multi-Agent Hub"
             setTextColor(Color.parseColor("#00E5FF"))
             textSize = 26f
             gravity = Gravity.CENTER
@@ -51,7 +56,7 @@ class MainActivity : Activity() {
             background = shape
             setPadding(40, 24, 40, 24)
             setOnClickListener {
-                checkPermissionsAndStart()
+                checkAllPermissions()
             }
         }
 
@@ -60,7 +65,7 @@ class MainActivity : Activity() {
         setContentView(rootLayout)
     }
 
-    private fun checkPermissionsAndStart() {
+    private fun checkAllPermissions() {
         if (!Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "Please enable 'Display over other apps'", Toast.LENGTH_LONG).show()
             val intent = Intent(
@@ -71,11 +76,33 @@ class MainActivity : Activity() {
             return
         }
 
-        // Request Screen Capture permission from Android
+        val neededPermissions = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            neededPermissions.add(Manifest.permission.CAMERA)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            neededPermissions.add(Manifest.permission.RECORD_AUDIO)
+        }
+
+        if (neededPermissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, neededPermissions.toTypedArray(), REQUEST_PERMISSIONS)
+        } else {
+            requestScreenCapture()
+        }
+    }
+
+    private fun requestScreenCapture() {
         startActivityForResult(
             mediaProjectionManager.createScreenCaptureIntent(),
             REQUEST_SCREEN_CAPTURE
         )
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_PERMISSIONS) {
+            requestScreenCapture()
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -88,7 +115,7 @@ class MainActivity : Activity() {
             startForegroundService(serviceIntent)
             finish()
         } else {
-            Toast.makeText(this, "Screen capture permission required for JAI Vision.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Screen capture permission needed for JAI Vision.", Toast.LENGTH_SHORT).show()
         }
     }
 }
