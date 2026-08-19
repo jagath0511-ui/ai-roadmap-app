@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit
 
 object AiScreenAnalyzer {
 
-    var apiKey: String = "AQ.Ab8RN6LGzp4hSH577WHPLJscu4hWr8jPx-VWolSgZSv3xm8kRg"
+    // Configured with Google AI Studio Key (Project: Jai agent / 901415720150)
+    var apiKey: String = "AQ.Ab8RN6LlxGyCX4tCnegIrCwHdxYvwzsviKoR5g7M34nzLjmcWg"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -50,10 +51,12 @@ object AiScreenAnalyzer {
             val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
             val requestBody = requestJson.toString().toRequestBody(mediaType)
 
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+            // Clean endpoint without query string; AQ keys authenticate via header
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
             val request = Request.Builder()
                 .url(url)
                 .addHeader("x-goog-api-key", apiKey)
+                .addHeader("Content-Type", "application/json")
                 .post(requestBody)
                 .build()
 
