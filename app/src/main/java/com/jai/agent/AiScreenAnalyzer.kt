@@ -65,7 +65,7 @@ object AiScreenAnalyzer {
             val requestBody = requestJson.toString().toRequestBody(mediaType)
 
             // Target active Gemini 3 Flash endpoint
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent"
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
             val request = Request.Builder()
                 .url(url)
                 .addHeader("x-goog-api-key", apiKey)
