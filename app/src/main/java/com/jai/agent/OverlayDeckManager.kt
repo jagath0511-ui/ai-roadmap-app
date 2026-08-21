@@ -30,7 +30,6 @@ class OverlayDeckManager(
     private lateinit var cameraTextureView: TextureView
     private lateinit var cameraContainer: FrameLayout
 
-    // Camera2 State
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
     private var backgroundThread: HandlerThread? = null
@@ -56,7 +55,7 @@ class OverlayDeckManager(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutFlag,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -87,7 +86,7 @@ class OverlayDeckManager(
         cameraContainer = FrameLayout(service).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                400
+                420
             ).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
                 setMargins(0, 8, 0, 8)
@@ -100,6 +99,7 @@ class OverlayDeckManager(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
+            isOpaque = false
             surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                 override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
                     pendingLensFacing?.let { facing ->
