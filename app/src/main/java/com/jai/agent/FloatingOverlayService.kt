@@ -480,5 +480,18 @@ class FloatingOverlayService : Service(), TextToSpeech.OnInitListener {
                         updateStatus("Failed: ${result.reason}")
                         FailureLogger.log(applicationContext, "executeCommand", "Action failed: ${result.reason}")
                     }
-                    is ActionResult.NotAnAction -> {
+                                        is ActionResult.NotAnAction -> {
+                        // Treat text answers as conversational replies
+                        speakOutResponse(aiResponse)
+                        updateStatus(aiResponse)
+                    }
+                }
+            } catch (e: Exception) {
+                FailureLogger.log(applicationContext, "processUserInteraction", "Command execution exception: ${e.localizedMessage}")
+                speakOutResponse("Failed to execute command.")
+                updateStatus("Execution Error")
+            }
+        }
+    }
+    
     
