@@ -1,69 +1,84 @@
 package com.jai.agent
 
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
 import android.content.Context
-import android.os.Environment
+import android.media.AudioAttributes
+import android.os.Bundle
 import android.speech.tts.TextToSpeech
-import java.io.File
+import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
-class VoiceEngine(private val context: Context) {
+object VoiceEngine : TextToSpeech.OnInitListener {
 
-    private val modelDir = File(Environment.getExternalStorageDirectory(), "jai_models")
-    private var ttsSession: OrtSession? = null
-    private var nativeTtsFallback: TextToSpeech? = null
-    private var isNativeTtsReady = false
+    private var tts: TextToSpeech? = null
+    private var isInitialized = false
+    private var pendingUtterance: String? = null
 
-    init {
-        initKokoroSession()
-        initSystemFallbackTts()
+    fun initialize(context: Context) {
+        if (tts == null) {
+            tts = TextToSpeech(context.applicationContext, this)
+        }
     }
 
-    private fun initKokoroSession() {
-        try {
-            val modelFile = File(modelDir, "kokoro-v1.0.int8.onnx")
-            if (modelFile.exists()) {
-                val env = OrtEnvironment.getEnvironment()
-                val opts = OrtSession.SessionOptions().apply {
-                    setIntraOpNumThreads(4)
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.let { engine ->
+                val result = engine.setLanguage(Locale.US)
+                if (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED) {
+                    engine.setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                            .build()
+                    )
+                    engine.setSpeechRate(1.05f)
+                    engine.setPitch(1.0f)
+                    isInitialized = true
+
+                    pendingUtterance?.let {
+                        speak(it)
+                        pendingUtterance = null
+                    }
                 }
-                ttsSession = env.createSession(modelFile.absolutePath, opts)
-            }
-        } catch (ignored: Exception) {}
-    }
-
-    private fun initSystemFallbackTts() {
-        nativeTtsFallback = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                nativeTtsFallback?.language = Locale.US
-                isNativeTtsReady = true
             }
         }
     }
 
-    fun speak(text: String) {
-        if (isNativeTtsReady) {
-            nativeTtsFallback?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "JAI_TTS")
+    fun speak(text: String, onComplete: (() -> Unit)? = null) {
+        if (text.isBlank()) return
+
+        if (!isInitialized) {
+            pendingUtterance = text
+            return
         }
+
+        onComplete?.let { callback ->
+            val utteranceId = "JAI_VOICE_${System.currentTimeMillis()}"
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                override fun onDone(id: String?) {
+                    if (id == utteranceId) callback()
+                }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {}
+            })
+            val params = Bundle().apply {
+                putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+            }
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+            return
+        }
+
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "JAI_DIRECT_SPEECH")
     }
 
-    fun checkModelsStatus(): String {
-        val whisper = File(modelDir, "ggml-small.bin").exists()
-        val kokoro = File(modelDir, "kokoro-v1.0.int8.onnx").exists()
-        val voices = File(modelDir, "voices-v1.0.bin").exists()
-
-        return when {
-            whisper && kokoro && voices -> "✅ Voice & Ear Models Detected"
-            else -> "⚠️ Offline voice models missing in /sdcard/jai_models/"
-        }
+    fun stop() {
+        tts?.stop()
     }
 
     fun shutdown() {
-        try {
-            nativeTtsFallback?.stop()
-            nativeTtsFallback?.shutdown()
-            ttsSession?.close()
-        } catch (ignored: Exception) {}
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
+        isInitialized = false
     }
 }
