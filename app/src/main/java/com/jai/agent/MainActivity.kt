@@ -22,8 +22,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Schedule battery-friendly periodic briefings
         ScheduledDigestWorker.schedulePeriodicDigest(this)
 
         val layout = android.widget.LinearLayout(this).apply {
@@ -48,8 +46,7 @@ class MainActivity : AppCompatActivity() {
         btnGrantAccessibility = Button(this).apply {
             text = "1. Enable Accessibility Control"
             setOnClickListener {
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                startActivity(intent)
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             }
         }
         layout.addView(btnGrantAccessibility)
@@ -69,7 +66,9 @@ class MainActivity : AppCompatActivity() {
     private fun requestRequiredPermissions() {
         val permissions = mutableListOf(
             Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.CAMERA
+            Manifest.permission.CAMERA,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_CONTACTS
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -102,7 +101,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             startService(serviceIntent)
         }
-        Toast.makeText(this, "JAI Active: Shake phone or wave hand to wake!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "JAI Ready! Say 'call Mummy' or 'open Gemini type hello'", Toast.LENGTH_SHORT).show()
     }
 
     override fun onResume() {
