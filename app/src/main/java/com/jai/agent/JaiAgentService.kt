@@ -1,4 +1,4 @@
-package com.jai.agent
+        package com.jai.agent
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityService
@@ -37,7 +37,6 @@ object FailureLogger {
             val existingLines = if (file.exists()) file.readLines() else emptyList()
             val trimmed = (existingLines + line).takeLast(MAX_LINES)
             file.writeText(trimmed.joinToString("\n") + "\n")
-
             Log.w("JAI_FAILURE", "$action -> $reason")
         } catch (e: Exception) {
             Log.e("FailureLogger", "Log error: ${e.localizedMessage}")
@@ -57,12 +56,12 @@ object FailureLogger {
 class JaiAgentService : AccessibilityService() {
 
     private var lastScanTimestamp = 0L
-    private val scanThrottleMs = 120L
+    private val scanThrottleMs = 100L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        Log.d("JaiAgentService", "JAI Connected & Ready")
+        Log.d("JaiAgentService", "JAI Accessibility Connected & Ready")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -82,18 +81,28 @@ class JaiAgentService : AccessibilityService() {
 
             val rootNode = rootInActiveWindow ?: return
 
-            // 1. Process Pending Text Injection
+            // 1. WhatsApp Targeted Contact Navigation
+            if (event.packageName == "com.whatsapp" && pendingWhatsAppTargetContact != null) {
+                val contactName = pendingWhatsAppTargetContact!!
+                val found = clickNodeWithTextRecursive(rootNode, contactName)
+                if (found) {
+                    pendingWhatsAppTargetContact = null
+                    pendingTextToType = pendingWhatsAppMessage
+                    pendingWhatsAppMessage = null
+                }
+            }
+
+            // 2. Text Injection & Auto-Send Dispatcher
             if (!pendingTextToType.isNullOrBlank()) {
                 val success = attemptTypeText(rootNode, pendingTextToType!!)
                 if (success) {
                     pendingTextToType = null
                     notifyResult(ActionResult.Success("Text entered."))
-                }
-            }
 
-            // 2. Process Pending WhatsApp Dispatch
-            if (event.packageName == "com.whatsapp" && pendingWhatsAppMessage != null) {
-                attemptWhatsAppSend(rootNode)
+                    if (event.packageName == "com.whatsapp") {
+                        triggerWhatsAppSendLoop(retries = 6)
+                    }
+                }
             }
 
             rootNode.recycle()
@@ -102,9 +111,6 @@ class JaiAgentService : AccessibilityService() {
         }
     }
 
-    /**
-     * Robust input search: Scans for editable nodes, focuses them, and injects text.
-     */
     fun attemptTypeText(rootNode: AccessibilityNodeInfo, text: String): Boolean {
         return try {
             val targetField = findEditableNodeRecursive(rootNode)
@@ -138,42 +144,68 @@ class JaiAgentService : AccessibilityService() {
         return null
     }
 
-    private fun attemptWhatsAppSend(rootNode: AccessibilityNodeInfo, retriesLeft: Int = 5) {
-        try {
-            var sendBtn = rootNode.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send")?.firstOrNull()
-            if (sendBtn == null) sendBtn = rootNode.findAccessibilityNodeInfosByText("Send")?.firstOrNull()
-            if (sendBtn == null) sendBtn = findNodeByContentDesc(rootNode, "Send")
+    private fun clickNodeWithTextRecursive(node: AccessibilityNodeInfo, text: String): Boolean {
+        val nodeText = node.text?.toString().orEmpty()
+        val nodeDesc = node.contentDescription?.toString().orEmpty()
 
-            if (sendBtn != null && sendBtn.isClickable) {
-                val ok = sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                sendBtn.recycle()
-                if (ok) {
-                    pendingWhatsAppMessage = null
-                    notifyResult(ActionResult.Success("WhatsApp message sent."))
-                } else if (retriesLeft > 0) {
-                    scheduleWhatsAppRetry(retriesLeft - 1)
-                }
-            } else if (retriesLeft > 0) {
-                sendBtn?.recycle()
-                scheduleWhatsAppRetry(retriesLeft - 1)
-            } else {
-                sendBtn?.recycle()
-                pendingWhatsAppMessage = null
+        if (nodeText.contains(text, ignoreCase = true) || nodeDesc.contains(text, ignoreCase = true)) {
+            var target: AccessibilityNodeInfo? = node
+            while (target != null && !target.isClickable) {
+                target = target.parent
             }
-        } catch (e: Exception) {
-            FailureLogger.log(this, "attemptWhatsAppSend", "${e.localizedMessage}")
+            if (target != null && target.isClickable) {
+                val ok = target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (target != node) target.recycle()
+                return ok
+            }
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val clicked = clickNodeWithTextRecursive(child, text)
+            child.recycle()
+            if (clicked) return true
+        }
+        return false
+    }
+
+    private fun triggerWhatsAppSendLoop(retries: Int) {
+        val handler = Handler(Looper.getMainLooper())
+        for (i in 1..retries) {
+            handler.postDelayed({
+                rootInActiveWindow?.let { root ->
+                    val sent = attemptClickSend(root)
+                    root.recycle()
+                    if (sent) return@postDelayed
+                }
+            }, i * 250L)
         }
     }
 
-    private fun scheduleWhatsAppRetry(retriesLeft: Int) {
-        Handler(Looper.getMainLooper()).postDelayed({
-            try {
-                rootInActiveWindow?.let { root ->
-                    attemptWhatsAppSend(root, retriesLeft)
-                    root.recycle()
+    private fun attemptClickSend(rootNode: AccessibilityNodeInfo): Boolean {
+        var sendBtn = rootNode.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send")?.firstOrNull()
+        if (sendBtn == null) sendBtn = rootNode.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send_container")?.firstOrNull()
+        if (sendBtn == null) sendBtn = findNodeByContentDesc(rootNode, "Send")
+        if (sendBtn == null) sendBtn = rootNode.findAccessibilityNodeInfosByText("Send")?.firstOrNull()
+
+        if (sendBtn != null) {
+            var clickableTarget: AccessibilityNodeInfo? = sendBtn
+            while (clickableTarget != null && !clickableTarget.isClickable) {
+                clickableTarget = clickableTarget.parent
+            }
+
+            if (clickableTarget != null && clickableTarget.isClickable) {
+                val ok = clickableTarget.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (clickableTarget != sendBtn) clickableTarget.recycle()
+                sendBtn.recycle()
+                if (ok) {
+                    notifyResult(ActionResult.Success("Message sent."))
+                    return true
                 }
-            } catch (e: Exception) {}
-        }, 350)
+            }
+            sendBtn.recycle()
+        }
+        return false
     }
 
     private fun findNodeByContentDesc(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
@@ -199,6 +231,7 @@ class JaiAgentService : AccessibilityService() {
         var currentForegroundApp: String = "Home"
         var pendingTextToType: String? = null
         var pendingWhatsAppMessage: String? = null
+        var pendingWhatsAppTargetContact: String? = null
         var resultListener: ((ActionResult) -> Unit)? = null
 
         private fun notifyResult(result: ActionResult) {
@@ -208,32 +241,39 @@ class JaiAgentService : AccessibilityService() {
         fun executeCommand(context: Context, responseText: String): ActionResult {
             val trimmed = responseText.trim()
             return when {
+                trimmed.startsWith("ACTION:WHATSAPP_TARGET:") -> {
+                    val payload = trimmed.removePrefix("ACTION:WHATSAPP_TARGET:").trim()
+                    val contact = payload.substringBefore(":::")
+                    val msg = payload.substringAfter(":::")
+                    targetWhatsAppContactAndSend(context, contact, msg)
+                }
                 trimmed.startsWith("ACTION:OPEN_AND_TYPE:") -> {
                     val payload = trimmed.removePrefix("ACTION:OPEN_AND_TYPE:").trim()
-                    val parts = payload.split(":::")
-                    val appName = parts.getOrNull(0) ?: ""
-                    val textToType = parts.getOrNull(1) ?: ""
+                    val appName = payload.substringBefore(":::")
+                    val textToType = payload.substringAfter(":::")
                     openAppAndType(context, appName, textToType)
                 }
                 trimmed.startsWith("ACTION:OPEN_APP:") -> openApp(context, trimmed.removePrefix("ACTION:OPEN_APP:").trim())
                 trimmed.startsWith("ACTION:TYPE:") -> typeText(trimmed.removePrefix("ACTION:TYPE:").trim())
-                trimmed.startsWith("ACTION:WHATSAPP:") -> sendWhatsApp(context, trimmed.removePrefix("ACTION:WHATSAPP:").trim())
                 trimmed.startsWith("ACTION:CALL:") -> placeCall(context, trimmed.removePrefix("ACTION:CALL:").trim())
-                trimmed.startsWith("ACTION:GMAIL:") -> sendEmail(context, trimmed.removePrefix("ACTION:GMAIL:").trim())
-                trimmed.startsWith("ACTION:SMS:") -> sendSms(context, trimmed.removePrefix("ACTION:SMS:").trim())
                 trimmed.startsWith("ACTION:ALARM:") -> setAlarm(context, trimmed.removePrefix("ACTION:ALARM:"))
                 trimmed.startsWith("ACTION:BROWSE:") -> browse(context, trimmed.removePrefix("ACTION:BROWSE:").trim())
                 else -> ActionResult.NotAnAction
             }
         }
 
+        private fun targetWhatsAppContactAndSend(context: Context, contact: String, msg: String): ActionResult {
+            pendingWhatsAppTargetContact = contact
+            pendingWhatsAppMessage = msg
+            return openApp(context, "whatsapp")
+        }
+
         private fun openAppAndType(context: Context, appName: String, text: String): ActionResult {
             val launchResult = openApp(context, appName)
             if (launchResult is ActionResult.Success) {
                 pendingTextToType = text
-                // Schedule repeated injection attempts while target app loads
                 val handler = Handler(Looper.getMainLooper())
-                for (delay in listOf(600L, 1200L, 1800L)) {
+                for (delay in listOf(500L, 1000L, 1600L, 2300L)) {
                     handler.postDelayed({
                         instance?.rootInActiveWindow?.let { root ->
                             if (pendingTextToType != null) {
@@ -250,7 +290,7 @@ class JaiAgentService : AccessibilityService() {
         }
 
         fun openApp(context: Context, appNameRaw: String): ActionResult {
-            val clean = appNameRaw.lowercase().replace("app", "").replace("application", "").replace(" ", "").trim()
+            val clean = appNameRaw.lowercase().replace("app", "").replace("application", "").replace(" ", "").replace("'", "").trim()
             if (clean.isBlank()) return ActionResult.Failure("No app specified.")
 
             val pm = context.packageManager
@@ -259,7 +299,6 @@ class JaiAgentService : AccessibilityService() {
                 clean.contains("whatsapp") -> listOf("com.whatsapp", "com.whatsapp.w4b")
                 clean.contains("gemini") -> listOf("com.google.android.apps.bard", "com.google.android.googlequicksearchbox")
                 clean.contains("instagram") -> listOf("com.instagram.android")
-                clean.contains("gmail") -> listOf("com.google.android.gm")
                 clean.contains("paytm") -> listOf("net.one97.paytm")
                 clean.contains("chrome") -> listOf("com.android.chrome")
                 else -> emptyList()
@@ -279,9 +318,8 @@ class JaiAgentService : AccessibilityService() {
             try {
                 val mainIntent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
                 val installedApps = pm.queryIntentActivities(mainIntent, 0)
-
                 for (info in installedApps) {
-                    val label = info.loadLabel(pm).toString().lowercase().replace(" ", "")
+                    val label = info.loadLabel(pm).toString().lowercase().replace(" ", "").replace("'", "")
                     val pkg = info.activityInfo.packageName.lowercase()
                     if (label == clean || label.contains(clean) || pkg.contains(clean)) {
                         val launchIntent = pm.getLaunchIntentForPackage(info.activityInfo.packageName)
@@ -315,7 +353,7 @@ class JaiAgentService : AccessibilityService() {
         private fun placeCall(context: Context, query: String): ActionResult {
             val resolvedNumber = ContactResolver.resolvePhoneNumber(context, query)
             if (resolvedNumber.isNullOrBlank()) {
-                return ActionResult.Failure("Could not find contact '$query'.")
+                return ActionResult.Failure("Contact '$query' not found.")
             }
 
             val hasCallPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
@@ -328,51 +366,6 @@ class JaiAgentService : AccessibilityService() {
                 ActionResult.Success("Calling $query ($resolvedNumber).")
             } catch (e: Exception) {
                 ActionResult.Failure("Call failed: ${e.localizedMessage}")
-            }
-        }
-
-        private fun sendWhatsApp(context: Context, msg: String): ActionResult {
-            return try {
-                pendingWhatsAppMessage = msg
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    setPackage("com.whatsapp")
-                    putExtra(Intent.EXTRA_TEXT, msg)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                context.startActivity(intent)
-                ActionResult.Success("Opening WhatsApp.")
-            } catch (e: Exception) {
-                pendingWhatsAppMessage = null
-                ActionResult.Failure("WhatsApp not available.")
-            }
-        }
-
-        private fun sendEmail(context: Context, body: String): ActionResult {
-            return try {
-                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                    data = Uri.parse("mailto:")
-                    putExtra(Intent.EXTRA_TEXT, body)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                context.startActivity(intent)
-                ActionResult.Success("Opening Email app.")
-            } catch (e: Exception) {
-                ActionResult.Failure("No email app found.")
-            }
-        }
-
-        private fun sendSms(context: Context, body: String): ActionResult {
-            return try {
-                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                    data = Uri.parse("smsto:")
-                    putExtra("sms_body", body)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                context.startActivity(intent)
-                ActionResult.Success("Opening Messages app.")
-            } catch (e: Exception) {
-                ActionResult.Failure("No messaging app found.")
             }
         }
 
