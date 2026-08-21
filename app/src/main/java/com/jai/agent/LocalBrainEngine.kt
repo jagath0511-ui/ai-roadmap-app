@@ -1,65 +1,102 @@
 package com.jai.agent
 
-import android.os.Environment
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.File
+import android.content.Context
+import android.hardware.camera2.CameraManager
+import android.media.AudioManager
+import android.os.BatteryManager
 
 object LocalBrainEngine {
 
-    private val modelDir = File(Environment.getExternalStorageDirectory(), "jai_models")
-
-    val earsModel = File(modelDir, "ggml-small.bin")
-    val voiceModel = File(modelDir, "kokoro-v1.0.int8.onnx")
-    val voiceBin = File(modelDir, "voices-v1.0.bin")
+    private var isTorchOn = false
 
     /**
-     * Dynamically finds ANY installed Gemma GGUF model in /sdcard/jai_models/
+     * Parses offline natural language commands and executes direct OS control actions.
      */
-    fun getActiveBrainModelFile(): File? {
-        if (!modelDir.exists()) return null
-        
-        // Priority list of models
-        val supportedNames = listOf(
-            "gemma-2-2b-it-Q4_K_M.gguf",
-            "gemma-2-2b-it.q4_k_m.gguf",
-            "gemma-3n-E4B-it-Q4_K_L.gguf",
-            "gemma-3n-E4B-it-Q4_K_M.gguf",
-            "Gemma-3n-E2B-it-Q4_K_L.gguf"
-        )
+    fun processOfflineIntent(context: Context, rawPrompt: String): String? {
+        val prompt = rawPrompt.lowercase().trim()
 
-        for (name in supportedNames) {
-            val file = File(modelDir, name)
-            if (file.exists() && file.length() > 0) return file
+        return when {
+            // 1. Flashlight / Torch Controls
+            prompt.contains("flashlight on") || prompt.contains("turn on torch") || prompt.contains("torch on") -> {
+                toggleFlashlight(context, true)
+            }
+            prompt.contains("flashlight off") || prompt.contains("turn off torch") || prompt.contains("torch off") -> {
+                toggleFlashlight(context, false)
+            }
+
+            // 2. Volume & Audio Adjustments
+            prompt.contains("volume up") || prompt.contains("increase volume") || prompt.contains("louder") -> {
+                adjustVolume(context, AudioManager.ADJUST_RAISE)
+            }
+            prompt.contains("volume down") || prompt.contains("decrease volume") || prompt.contains("lower volume") -> {
+                adjustVolume(context, AudioManager.ADJUST_LOWER)
+            }
+            prompt.contains("mute") || prompt.contains("silence phone") -> {
+                setVolumeMute(context)
+            }
+
+            // 3. Battery & Power Status
+            prompt.contains("battery") || prompt.contains("power level") || prompt.contains("juice left") -> {
+                getBatteryStatus(context)
+            }
+
+            // 4. Quick Device Actions
+            prompt.startsWith("open ") -> "ACTION:OPEN_APP:" + rawPrompt.substringAfter("open").trim()
+            prompt.startsWith("call ") -> "ACTION:CALL:" + rawPrompt.substringAfter("call").trim()
+            prompt.startsWith("type ") -> "ACTION:TYPE:" + rawPrompt.substringAfter("type").trim()
+            prompt.startsWith("whatsapp ") -> "ACTION:WHATSAPP:" + rawPrompt.substringAfter("whatsapp").trim()
+            prompt.startsWith("search ") || prompt.startsWith("browse ") -> {
+                val query = rawPrompt.substringAfter("search").takeIf { it != rawPrompt } ?: rawPrompt.substringAfter("browse").trim()
+                "ACTION:BROWSE:$query"
+            }
+
+            else -> null
         }
-
-        // Fallback: Check for any .gguf file present in the directory
-        return modelDir.listFiles()?.firstOrNull { it.name.endsWith(".gguf") && it.length() > 0 }
     }
 
-    fun getModelsHealth(): String {
-        val brainFile = getActiveBrainModelFile()
-        val hasBrain = brainFile != null
-        val hasEars = earsModel.exists() && earsModel.length() > 0
-        val hasVoice = voiceModel.exists() && voiceModel.length() > 0
-        val hasVoiceData = voiceBin.exists() && voiceBin.length() > 0
+    private fun toggleFlashlight(context: Context, state: Boolean): String {
+        return try {
+            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val cameraId = cameraManager.cameraIdList.firstOrNull() ?: return "No flashlight hardware detected."
+            cameraManager.setTorchMode(cameraId, state)
+            isTorchOn = state
+            if (state) "Flashlight turned on." else "Flashlight turned off."
+        } catch (e: Exception) {
+            FailureLogger.log(context, "LocalBrainEngine:Torch", e.localizedMessage.orEmpty())
+            "Unable to toggle flashlight."
+        }
+    }
 
-        return buildString {
-            append("⚡ JAI On-Device Engine Status:\n\n")
-            if (hasBrain) {
-                append("🧠 Brain (${brainFile?.name}): READY (${brainFile!!.length() / (1024 * 1024)} MB)\n")
-            } else {
-                append("❌ Brain: Missing .gguf model in /sdcard/jai_models/\n")
-            }
-            append(if (hasEars) "👂 Ears (Whisper): READY\n" else "⚪ Ears: Cloud STT Active\n")
-            append(if (hasVoice && hasVoiceData) "🗣️ Voice (Kokoro): READY\n" else "⚪ Voice: Native Android TTS Active\n\n")
+    private fun adjustVolume(context: Context, direction: Int): String {
+        return try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI)
+            "Volume adjusted."
+        } catch (e: Exception) {
+            FailureLogger.log(context, "LocalBrainEngine:Volume", e.localizedMessage.orEmpty())
+            "Failed to adjust volume."
+        }
+    }
 
-            if (hasBrain) {
-                append("✅ Offline Brain Loaded & Ready!")
-            } else {
-                append("⚠️ Place your .gguf file in /sdcard/jai_models/")
-            }
+    private fun setVolumeMute(context: Context): String {
+        return try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, AudioManager.FLAG_SHOW_UI)
+            "Audio muted."
+        } catch (e: Exception) {
+            FailureLogger.log(context, "LocalBrainEngine:Mute", e.localizedMessage.orEmpty())
+            "Failed to mute audio."
+        }
+    }
+
+    private fun getBatteryStatus(context: Context): String {
+        return try {
+            val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            val level = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            "Battery is currently at $level percent."
+        } catch (e: Exception) {
+            FailureLogger.log(context, "LocalBrainEngine:Battery", e.localizedMessage.orEmpty())
+            "Unable to read battery level."
         }
     }
 }
-
