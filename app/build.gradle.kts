@@ -11,33 +11,23 @@ android {
         applicationId = "com.jai.agent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "3.0"
+        versionCode = 5
+        versionName = "3.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    signingConfigs {
-        create("releaseSigning") {
-            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-            enableV1Signing = true
-            enableV2Signing = true
-        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("releaseSigning")
+            // AGP built-in debug keystore fallback (Guaranteed to build on GitHub Actions & local machines)
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
         debug {
-            signingConfig = signingConfigs.getByName("releaseSigning")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
