@@ -23,105 +23,82 @@ object AiScreenAnalyzer {
         .build()
 
     suspend fun analyzeScreenImage(bitmap: Bitmap?, customPrompt: String): String = withContext(Dispatchers.IO) {
-        // PHASE 2 SPEED UPGRADE:
-        // If no camera bitmap is attached and it's a simple command, execute locally instantly!
-        if (bitmap == null && isSimpleCommand(customPrompt)) {
-            executeLocalCommand(customPrompt)
-        } else {
-            try {
-                val partsArray = JSONArray()
-                partsArray.put(JSONObject().put("text", "Active App: ${JaiAgentService.currentForegroundApp}\nTask: $customPrompt"))
+        val appInstance = JaiAgentService.instance
 
-                if (bitmap != null) {
-                    val outputStream = ByteArrayOutputStream()
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 60, outputStream)
-                    val base64Data = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
-
-                    val inlineData = JSONObject().apply {
-                        put("mimeType", "image/jpeg")
-                        put("data", base64Data)
-                    }
-                    partsArray.put(JSONObject().put("inlineData", inlineData))
-                    outputStream.close()
-                }
-
-                val systemInstruction = JSONObject().put("parts", JSONArray().put(JSONObject().put("text",
-                    """
-                    You are JAI, an ultra-fast on-device Android OS Agent.
-                    Trigger phone actions using ONLY these prefixes:
-                    - Open app: ACTION:OPEN_APP:<app_name>
-                    - Type text into focused field: ACTION:TYPE:<text_to_type>
-                    - Send WhatsApp message: ACTION:WHATSAPP:<message>
-                    - Phone call: ACTION:CALL:<contact_or_number>
-                    - Alarm/Schedule: ACTION:ALARM:<hour>:<minute>:<label>
-                    - Web search: ACTION:BROWSE:<search_query>
-                    For pure conversational questions, reply in 1 concise sentence.
-                    """.trimIndent()
-                )))
-
-                val requestJson = JSONObject().apply {
-                    put("system_instruction", systemInstruction)
-                    put("contents", JSONArray().put(JSONObject().put("parts", partsArray)))
-                }
-
-                val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
-                val requestBody = requestJson.toString().toRequestBody(mediaType)
-
-                val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
-                val request = Request.Builder()
-                    .url(url)
-                    .addHeader("x-goog-api-key", apiKey)
-                    .addHeader("Content-Type", "application/json")
-                    .post(requestBody)
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-                    val responseBody = response.body?.string().orEmpty()
-                    if (!response.isSuccessful) {
-                        return@use executeLocalCommand(customPrompt)
-                    }
-
-                    val jsonResponse = JSONObject(responseBody)
-                    val text = jsonResponse.optJSONArray("candidates")
-                        ?.optJSONObject(0)
-                        ?.optJSONObject("content")
-                        ?.optJSONArray("parts")
-                        ?.optJSONObject(0)
-                        ?.optString("text")
-
-                    text ?: executeLocalCommand(customPrompt)
-                }
-            } catch (e: Exception) {
-                executeLocalCommand(customPrompt)
+        // 1. FAST PATH: Check on-device LocalBrainEngine first (sub-50ms execution, works offline)
+        if (bitmap == null && appInstance != null) {
+            val localResult = LocalBrainEngine.processOfflineIntent(appInstance, customPrompt)
+            if (localResult != null) {
+                return@withContext localResult
             }
         }
-    }
 
-    private fun isSimpleCommand(prompt: String): Boolean {
-        val lower = prompt.lowercase().trim()
-        return lower.startsWith("open") ||
-               lower.startsWith("type") ||
-               lower.startsWith("call") ||
-               lower.startsWith("alarm") ||
-               lower.startsWith("schedule") ||
-               lower.startsWith("whatsapp") ||
-               lower.startsWith("search") ||
-               lower.startsWith("browse")
-    }
+        // 2. CLOUD PATH: Route complex questions & visual reasoning to Gemini Flash-Lite
+        try {
+            val partsArray = JSONArray()
+            partsArray.put(JSONObject().put("text", "Active App: ${JaiAgentService.currentForegroundApp}\nTask: $customPrompt"))
 
-    private fun executeLocalCommand(prompt: String): String {
-        val lower = prompt.lowercase().trim()
-        return when {
-            lower.startsWith("open") -> "ACTION:OPEN_APP:" + prompt.substringAfter("open").trim()
-            lower.startsWith("type") -> "ACTION:TYPE:" + prompt.substringAfter("type").trim()
-            lower.startsWith("call") -> "ACTION:CALL:" + prompt.substringAfter("call").trim()
-            lower.startsWith("alarm") || lower.startsWith("schedule") -> "ACTION:ALARM:7:00:Work Task"
-            lower.startsWith("whatsapp") -> "ACTION:WHATSAPP:" + prompt.substringAfter("whatsapp").trim()
-            lower.startsWith("search") || lower.startsWith("browse") -> {
-                val query = prompt.substringAfter("search").takeIf { it != prompt } ?: prompt.substringAfter("browse").trim()
-                "ACTION:BROWSE:$query"
+            if (bitmap != null) {
+                val outputStream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 60, outputStream)
+                val base64Data = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+
+                val inlineData = JSONObject().apply {
+                    put("mimeType", "image/jpeg")
+                    put("data", base64Data)
+                }
+                partsArray.put(JSONObject().put("inlineData", inlineData))
+                outputStream.close()
             }
-            else -> "JAI local engine active. Ready for your command."
+
+            val systemInstruction = JSONObject().put("parts", JSONArray().put(JSONObject().put("text",
+                """
+                You are JAI, an ultra-fast on-device Android OS Agent.
+                Trigger phone actions using ONLY these prefixes:
+                - Open app: ACTION:OPEN_APP:<app_name>
+                - Type text into focused field: ACTION:TYPE:<text_to_type>
+                - Send WhatsApp message: ACTION:WHATSAPP:<message>
+                - Phone call: ACTION:CALL:<contact_or_number>
+                - Alarm/Schedule: ACTION:ALARM:<hour>:<minute>:<label>
+                - Web search: ACTION:BROWSE:<search_query>
+                For pure conversational questions, reply in 1 concise sentence.
+                """.trimIndent()
+            )))
+
+            val requestJson = JSONObject().apply {
+                put("system_instruction", systemInstruction)
+                put("contents", JSONArray().put(JSONObject().put("parts", partsArray)))
+            }
+
+            val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+            val requestBody = requestJson.toString().toRequestBody(mediaType)
+
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("x-goog-api-key", apiKey)
+                .addHeader("Content-Type", "application/json")
+                .post(requestBody)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@use "Brain connection offline. Try a basic command."
+                }
+
+                val jsonResponse = JSONObject(responseBody)
+                val text = jsonResponse.optJSONArray("candidates")
+                    ?.optJSONObject(0)
+                    ?.optJSONObject("content")
+                    ?.optJSONArray("parts")
+                    ?.optJSONObject(0)
+                    ?.optString("text")
+
+                text ?: "Command acknowledged."
+            }
+        } catch (e: Exception) {
+            "Network unreachable. JAI local engine active."
         }
     }
 }
