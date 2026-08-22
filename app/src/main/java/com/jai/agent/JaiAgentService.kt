@@ -42,6 +42,19 @@ object FailureLogger {
             Log.e("FailureLogger", "Could not write failure log: ${e.localizedMessage}")
         }
     }
+
+    fun readRecent(context: Context, limit: Int = 20): List<String> {
+        return try {
+            val file = File(context.filesDir, "jai_failures.log")
+            if (file.exists()) {
+                file.readLines().takeLast(limit)
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 }
 
 class JaiAgentService : AccessibilityService() {
