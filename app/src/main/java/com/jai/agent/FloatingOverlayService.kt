@@ -266,3 +266,41 @@ class FloatingOverlayService : Service(), TextToSpeech.OnInitListener {
 
     override fun onBind(intent: Intent?): IBinder? = null
 }
+
+fun executeAutonomousBuildPipeline(taskPrompt: String) {
+    serviceScope.launch {
+        deckManager.updateStatus("Tri-Brain generating code...")
+
+        val pipelineResult = SelfHealingOrchestrator.executeWithSelfHealing(
+            context = applicationContext,
+            taskName = "Autonomous Web Build: $taskPrompt"
+        ) { attempt ->
+            try {
+                // 1. Generate code via Tri-Brain fan-out
+                val selectedCode = TriBrainArbitrageEngine.generateAndSelectBestCode(taskPrompt)
+
+                if (selectedCode.isBlank() || selectedCode.length < 30) {
+                    throw IllegalStateException("Generated code was empty or malformed.")
+                }
+
+                // 2. Commit and deploy directly to GitHub
+                val deployResult = DeployerEngine.commitAndDeployFile(
+                    filePath = "index.html",
+                    fileContent = selectedCode,
+                    commitMessage = "Autonomous deploy (Attempt $attempt): $taskPrompt"
+                )
+
+                if (deployResult.contains("❌")) {
+                    throw IllegalStateException(deployResult)
+                }
+
+                Result.success(deployResult)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+        speakOutResponse("Pipeline completed. Check your status.")
+        deckManager.updateStatus(pipelineResult)
+    }
+}
