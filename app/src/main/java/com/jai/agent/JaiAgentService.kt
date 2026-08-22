@@ -1,12 +1,10 @@
 package com.jai.agent
 
-import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -15,7 +13,10 @@ import android.provider.AlarmClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import androidx.core.content.ContextCompat
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 sealed class ActionResult {
     data class Success(val message: String) : ActionResult()
@@ -23,12 +24,32 @@ sealed class ActionResult {
     object NotAnAction : ActionResult()
 }
 
+object FailureLogger {
+    private const val MAX_LINES = 200
+
+    fun log(context: Context, action: String, reason: String) {
+        try {
+            val file = File(context.filesDir, "jai_failures.log")
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+            val line = "$timestamp | $action | $reason"
+
+            val existingLines = if (file.exists()) file.readLines() else emptyList()
+            val trimmed = (existingLines + line).takeLast(MAX_LINES)
+            file.writeText(trimmed.joinToString("\n") + "\n")
+
+            Log.w("JAI_FAILURE", "$action -> $reason")
+        } catch (e: Exception) {
+            Log.e("FailureLogger", "Could not write failure log: ${e.localizedMessage}")
+        }
+    }
+}
+
 class JaiAgentService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        Log.d("JaiAgentService", "Accessibility Engine Active")
+        Log.d("JaiAgentService", "JAI Accessibility Engine Active")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -44,7 +65,7 @@ class JaiAgentService : AccessibilityService() {
 
             val rootNode = rootInActiveWindow ?: return
 
-            // 1. If searching for a contact in WhatsApp
+            // 1. Locate and select targeted WhatsApp contact
             if (event.packageName == "com.whatsapp" && pendingWhatsAppTargetContact != null) {
                 val contactName = pendingWhatsAppTargetContact!!
                 val clicked = clickNodeWithTextRecursive(rootNode, contactName)
@@ -55,7 +76,7 @@ class JaiAgentService : AccessibilityService() {
                 }
             }
 
-            // 2. Type pending text into active field
+            // 2. Type pending text into focused/editable input
             if (!pendingTextToType.isNullOrBlank()) {
                 val typed = attemptTypeText(rootNode, pendingTextToType!!)
                 if (typed) {
@@ -70,14 +91,15 @@ class JaiAgentService : AccessibilityService() {
 
             rootNode.recycle()
         } catch (e: Exception) {
-            Log.e("JaiAgentService", "Event error: ${e.localizedMessage}")
+            FailureLogger.log(this, "onAccessibilityEvent", "Event error: ${e.localizedMessage}")
         }
     }
 
     fun attemptTypeText(rootNode: AccessibilityNodeInfo, text: String): Boolean {
+        var targetField: AccessibilityNodeInfo? = null
         return try {
-            val targetField = findEditableNodeRecursive(rootNode)
-            if (targetField != null) {
+            targetField = findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditableNodeRecursive(rootNode)
+            if (targetField != null && targetField.isEditable) {
                 targetField.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                 val args = Bundle().apply {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
@@ -89,13 +111,15 @@ class JaiAgentService : AccessibilityService() {
                     targetField.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     setOk = targetField.performAction(AccessibilityNodeInfo.ACTION_PASTE)
                 }
-                targetField.recycle()
                 setOk
             } else {
                 false
             }
         } catch (e: Exception) {
+            FailureLogger.log(this, "attemptTypeText", "Typing failed: ${e.localizedMessage}")
             false
+        } finally {
+            targetField?.recycle()
         }
     }
 
@@ -151,10 +175,11 @@ class JaiAgentService : AccessibilityService() {
     }
 
     private fun attemptClickSend(rootNode: AccessibilityNodeInfo): Boolean {
-        val sendBtnIds = listOf("com.whatsapp:id/send", "com.whatsapp:id/send_container")
+        val sendBtnIds = listOf("com.whatsapp:id/send", "com.whatsapp:id/send_container", "com.whatsapp:id/entry_action_send")
         for (id in sendBtnIds) {
             val nodes = rootNode.findAccessibilityNodeInfosByViewId(id)
-            for (node in nodes) {
+            if (!nodes.isNullOrEmpty()) {
+                val node = nodes[0]
                 var clickable: AccessibilityNodeInfo? = node
                 while (clickable != null && !clickable.isClickable) {
                     clickable = clickable.parent
@@ -162,24 +187,25 @@ class JaiAgentService : AccessibilityService() {
                 if (clickable != null && clickable.isClickable) {
                     val clicked = clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     if (clickable != node) clickable.recycle()
-                    node.recycle()
+                    nodes.forEach { it.recycle() }
                     if (clicked) {
                         notifyResult(ActionResult.Success("Message sent."))
                         return true
                     }
                 }
-                node.recycle()
+                nodes.forEach { it.recycle() }
             }
         }
 
         val sendTextNodes = rootNode.findAccessibilityNodeInfosByText("Send")
-        for (node in sendTextNodes) {
+        if (!sendTextNodes.isNullOrEmpty()) {
+            val node = sendTextNodes[0]
             if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                node.recycle()
+                sendTextNodes.forEach { it.recycle() }
                 notifyResult(ActionResult.Success("Message sent."))
                 return true
             }
-            node.recycle()
+            sendTextNodes.forEach { it.recycle() }
         }
         return false
     }
@@ -206,7 +232,6 @@ class JaiAgentService : AccessibilityService() {
         fun executeCommand(context: Context, responseText: String): ActionResult {
             val trimmed = responseText.trim()
             return when {
-                // 1. WhatsApp with specific contact
                 trimmed.startsWith("ACTION:WHATSAPP_TARGET:") -> {
                     val payload = trimmed.removePrefix("ACTION:WHATSAPP_TARGET:").trim()
                     val contact = payload.substringBefore(":::").trim()
@@ -214,7 +239,6 @@ class JaiAgentService : AccessibilityService() {
                     targetWhatsAppContactAndSend(context, contact, msg)
                 }
 
-                // 2. Chat Send Alias
                 trimmed.startsWith("ACTION:CHAT_SEND:") -> {
                     val payload = trimmed.removePrefix("ACTION:CHAT_SEND:").trim()
                     val contact = payload.substringBefore(":::").trim()
@@ -222,13 +246,11 @@ class JaiAgentService : AccessibilityService() {
                     targetWhatsAppContactAndSend(context, contact, msg)
                 }
 
-                // 3. Generic WhatsApp Send
                 trimmed.startsWith("ACTION:WHATSAPP:") -> {
                     val msg = trimmed.removePrefix("ACTION:WHATSAPP:").trim()
                     sendWhatsAppGeneric(context, msg)
                 }
 
-                // 4. Open App and Type
                 trimmed.startsWith("ACTION:OPEN_AND_TYPE:") -> {
                     val payload = trimmed.removePrefix("ACTION:OPEN_AND_TYPE:").trim()
                     val appName = payload.substringBefore(":::").trim()
@@ -236,9 +258,8 @@ class JaiAgentService : AccessibilityService() {
                     openAppAndType(context, appName, textToType)
                 }
 
-                // 5. Standard System Controls
                 trimmed.startsWith("ACTION:OPEN_APP:") -> openApp(context, trimmed.removePrefix("ACTION:OPEN_APP:").trim())
-                trimmed.startsWith("ACTION:TYPE:") -> typeText(trimmed.removePrefix("ACTION:TYPE:").trim())
+                trimmed.startsWith("ACTION:TYPE:") -> typeText(context, trimmed.removePrefix("ACTION:TYPE:").trim())
                 trimmed.startsWith("ACTION:CALL:") -> placeCall(context, trimmed.removePrefix("ACTION:CALL:").trim())
                 trimmed.startsWith("ACTION:ALARM:") -> setAlarm(context, trimmed.removePrefix("ACTION:ALARM:"))
                 trimmed.startsWith("ACTION:BROWSE:") -> browse(context, trimmed.removePrefix("ACTION:BROWSE:").trim())
@@ -253,6 +274,7 @@ class JaiAgentService : AccessibilityService() {
         }
 
         private fun sendWhatsAppGeneric(context: Context, msg: String): ActionResult {
+            if (msg.isBlank()) return ActionResult.Failure("No message provided.")
             return try {
                 pendingWhatsAppMessage = msg
                 val intent = Intent(Intent.ACTION_SEND).apply {
@@ -300,6 +322,7 @@ class JaiAgentService : AccessibilityService() {
                 clean.contains("instagram") -> "com.instagram.android"
                 clean.contains("chrome") -> "com.android.chrome"
                 clean.contains("paytm") -> "net.one97.paytm"
+                clean.contains("camera") -> "com.android.camera"
                 else -> null
             }
 
@@ -327,12 +350,14 @@ class JaiAgentService : AccessibilityService() {
                         }
                     }
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                FailureLogger.log(context, "ACTION:OPEN_APP", "Search error: ${e.localizedMessage}")
+            }
 
-            return BrowserAgent.routeWebIntent(context, appNameRaw)
+            return browse(context, appNameRaw)
         }
 
-        private fun typeText(text: String): ActionResult {
+        private fun typeText(context: Context, text: String): ActionResult {
             if (text.isBlank()) return ActionResult.Failure("No text given.")
             pendingTextToType = text
             val root = instance?.rootInActiveWindow
@@ -348,20 +373,17 @@ class JaiAgentService : AccessibilityService() {
         }
 
         private fun placeCall(context: Context, query: String): ActionResult {
-            val resolvedNumber = ContactResolver.resolvePhoneNumber(context, query)
-            if (resolvedNumber.isNullOrBlank()) {
-                return ActionResult.Failure("Contact '$query' not found.")
-            }
-            val hasCallPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+            if (query.isBlank()) return ActionResult.Failure("No contact or number given.")
             return try {
-                val action = if (hasCallPermission) Intent.ACTION_CALL else Intent.ACTION_DIAL
-                val intent = Intent(action, Uri.parse("tel:$resolvedNumber")).apply {
+                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$query")).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 context.startActivity(intent)
-                ActionResult.Success("Calling $query.")
+                ActionResult.Success("Dialing $query.")
             } catch (e: Exception) {
-                ActionResult.Failure("Call failed.")
+                val reason = "Call intent failed: ${e.localizedMessage}"
+                FailureLogger.log(context, "ACTION:CALL", reason)
+                ActionResult.Failure(reason)
             }
         }
 
@@ -370,7 +392,7 @@ class JaiAgentService : AccessibilityService() {
                 val parts = paramString.split(":")
                 val hour = parts.getOrNull(0)?.toIntOrNull() ?: 7
                 val min = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                val label = parts.getOrNull(2) ?: "Alarm"
+                val label = parts.getOrNull(2) ?: "JAI Alarm"
 
                 val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
                     putExtra(AlarmClock.EXTRA_HOUR, hour)
@@ -380,15 +402,32 @@ class JaiAgentService : AccessibilityService() {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 context.startActivity(intent)
-                ActionResult.Success("Alarm set.")
+                ActionResult.Success("Alarm set for %02d:%02d.".format(hour, min))
             } catch (e: Exception) {
-                ActionResult.Failure("Alarm failed.")
+                val reason = "Alarm failed: ${e.localizedMessage}"
+                FailureLogger.log(context, "ACTION:ALARM", reason)
+                ActionResult.Failure(reason)
             }
         }
 
         private fun browse(context: Context, query: String): ActionResult {
-            return BrowserAgent.routeWebIntent(context, query)
+            if (query.isBlank()) return ActionResult.Failure("No search query given.")
+            return try {
+                val url = if (query.startsWith("http://") || query.startsWith("https://")) {
+                    query
+                } else {
+                    "https://www.google.com/search?q=${Uri.encode(query)}"
+                }
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+                ActionResult.Success("Searching for $query.")
+            } catch (e: Exception) {
+                val reason = "Browser failed: ${e.localizedMessage}"
+                FailureLogger.log(context, "ACTION:BROWSE", reason)
+                ActionResult.Failure(reason)
+            }
         }
     }
 }
-
